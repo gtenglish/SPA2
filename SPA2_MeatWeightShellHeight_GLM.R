@@ -19,6 +19,8 @@ library(sf)
 # Define: 
 uid <- un.sameotoj
 pwd <- pw.sameotoj
+uid<- un.englishg
+pwd<- pw.englishg
 
 funcs <- c( "https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Survey_and_OSAC/convert.dd.dddd.r") 
 # Note: uses older contour.gen.r version (working on alternative to contour.gen altogether).
@@ -258,7 +260,7 @@ abline(0,1)
 
 # prediction 
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
-depth.predict <- 85
+depth.predict <- 88
 fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
            Log.DEPTH.CTR = log(abs(depth.predict)) - mean(test.data$Log.DEPTH), 
            SH = seq(2.5, 197.5, by = 5), 
@@ -266,7 +268,7 @@ fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
 
 fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response"))
 head(fit.pred)
-plot(fit.pred$pred.mtwt~fit.pred$SH )
+plot(fit.pred$pred.mtwt~fit.pred$SH)
 
 fit.pred$YEAR <- surveyyear
 fit.pred.2024 <- fit.pred 
@@ -340,7 +342,7 @@ livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
 
 
 #set predition depth 
-depth.xx <- 85
+depth.xx <- 88
 
 condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
                                  Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
@@ -350,7 +352,7 @@ condition.100mm.2024 <- data.frame(YEAR = surveyyear, Condition = condition.100m
 condition.100mm.2024$Depth <- depth.xx
 condition.100mm.2024
 #2024
-#8.69396
+#8.561007
 
 
 
@@ -526,7 +528,7 @@ livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
 
 
 #set predition depth 
-depth.xx <- 85
+depth.xx <- 88
 
 condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
                                                             Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
@@ -536,7 +538,7 @@ condition.100mm.2006 <- data.frame(YEAR = surveyyear, Condition = condition.100m
 condition.100mm.2006$Depth <- depth.xx
 condition.100mm.2006
 #2006
-#5.228463 
+#4.970498 
 
 
 
@@ -633,18 +635,25 @@ abline(0,1)
 
 # prediction 
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
-depth.predict <- 85
+depth.predict <- 65
 fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
                        Log.DEPTH.CTR = log(abs(depth.predict)) - mean(test.data$Log.DEPTH), 
                        SH = seq(2.5, 197.5, by = 5), 
                        depth_m = rep(depth.predict, length(Log.height.ctr)))
 
-fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response"))
-head(fit.pred)
-plot(fit.pred$pred.mtwt~fit.pred$SH )
+fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$fit)
+fit.pred$se.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$se.fit)
+head(fit.pred.all)
+plot(fit.pred$pred.mtwt~fit.pred$SH)
+points(sc.wgthgt$WET_MEAT_WGT~sc.wgthgt$HEIGHT)
 
 fit.pred$YEAR <- surveyyear
 fit.pred.1996 <- fit.pred 
+# fit.pred.2006 <- fit.pred
+# fit.pred.2024 <- fit.pred
+
+fit.pred.all <- rbind(fit.pred.2024, fit.pred.2006, fit.pred.1996) #For use in SPA2_HolisticPlots.R
+
 
 #create matrix of depths by tow to use in predict function
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
@@ -715,7 +724,7 @@ livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
 
 
 #set predition depth 
-depth.xx <- 85
+depth.xx <- 88
 
 condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
                                                             Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
@@ -725,7 +734,7 @@ condition.100mm.1996 <- data.frame(YEAR = surveyyear, Condition = condition.100m
 condition.100mm.1996$Depth <- depth.xx
 condition.100mm.1996
 #1996
-#17.30597
+#19.66132
 
 
 
