@@ -23,7 +23,6 @@ uid<- un.englishg
 pwd<- pw.englishg
 
 funcs <- c( "https://raw.githubusercontent.com/Mar-scal/Assessment_fns/master/Survey_and_OSAC/convert.dd.dddd.r") 
-# Note: uses older contour.gen.r version (working on alternative to contour.gen altogether).
 dir <- getwd()
 for(fun in funcs) 
 {
@@ -33,6 +32,7 @@ for(fun in funcs)
   file.remove(paste0(dir,"/",basename(fun)))
 }
 
+# Data set-up ####
 
 ## read in holistic sample data to be combined with mw-sh data in database 
 holistic.data <- read.csv("Z:/Projects/SPA2/Data/holistic.mwsh.2024.csv")
@@ -81,7 +81,7 @@ table(livefreq.dat$YEAR)
 
 detail.dat %>% filter(YEAR == 1996)
 detail.dat %>% filter(YEAR == 2006)
-detail.dat %>% filter(YEAR == 2006)
+detail.dat %>% filter(YEAR == 2024)
 
 # Dates of samples; June in 2024, end of May 2006, end of Aug 1996 -- model each separately bc of confounding seasonal effect 
 unique(as.Date(detail.dat$TOW_DATE))
@@ -146,13 +146,11 @@ table(livefreq$CRUISE)
 livefreq %>% filter(YEAR == 2006 & TOW_NO %in% c(40,42,54))
 
 
-
 ### Spatial Distribution 
 livefreq$slat <- convert.dd.dddd(livefreq$START_LAT)
 livefreq$slon <- convert.dd.dddd(livefreq$START_LONG)
 head(livefreq)
 
-#livefreq %>% filter(YEAR == 2006 & TOW_NO %in% c(40,42,54))
 livefreq.sf <- st_as_sf(livefreq, coords = c("slon", "slat"), crs = 4326)
 
 test <- livefreq.sf %>% filter(YEAR == 2006 & TOW_NO %in% c(40, 42, 54))
@@ -171,6 +169,8 @@ summary(dat.all)
 
 
 #---- Meat weight shell height modelling ----
+#Meat weight shell height data (to be used in spatial plots for condition) is only accurate for 2024 as 1996 and 2006 do not have enough data points/tow depths are not aligned well with mean depth of spa2. If plotted, condition is shown as uniform across all of SPA2. Therefore, all models have been run without depth as a covariate for the purpose of displaying in the MWSH plots. Depth is still used in each year's model for use in biomass and for 2024 condition figure. 1996 and 2006 "ConditionForSpatialPlot" code has been kept in case there is a need for re-running these condition plots.
+
 
 #### 2024 #####
 surveyyear <- 2024  
@@ -206,11 +206,9 @@ dev.off()
 
 #run model
 MWTSH.YYYY <-  glm(WET_MEAT_WGT~Log.HEIGHT.CTR+Log.DEPTH.CTR, data=test.data, family=Gamma(link=log), na.action = na.omit)
-#MWTSH.YYYY.2 <-  glm(WET_MEAT_WGT~Log.HEIGHT.CTR+Log.DEPTH.CTR, data=test.data, family=gaussian(link=log), na.action = na.omit)
 
 summary(MWTSH.YYYY)
 plot(MWTSH.YYYY)
-
 
 ## Plot of Pearson residuals 
 #plot(density(resid(MWTSH.YYYY, type='pearson')))
@@ -236,7 +234,6 @@ plot(MWTSH.YYYY)
 #length(cooksd_MWTSH.YYYY[cooksd_MWTSH.YYYY > mean(cooksd_MWTSH.YYYY) * 2])
 #test.data[23,]
 
-
 #Save summary to txt file
 sink(paste0("Z:/Projects/SPA2/Data/MWTSH_SPA2_",surveyyear,"_ModelSummary.txt"))
 print(summary(MWTSH.YYYY))
@@ -247,31 +244,27 @@ latt <- data.frame(test.data, res=residuals(MWTSH.YYYY,"pearson"),fit=fitted(MWT
 head(latt)
 
 #Residuals vs fitted - full area 
-#plot(MWTSH.YYYY$residuals ~ MWTSH.YYYY$fitted.values )
 plot(latt$res~ latt$fit )
 
-
 #Plot of fitted values 
-#plot(MWTSH.YYYY$model$WET_MEAT_WGT   ~ MWTSH.YYYY$fitted.values )
-#abline(0,1)
 plot(latt$WET_MEAT_WGT   ~ latt$fit )
 abline(0,1)
 
-
-# prediction 
+# prediction without depth 
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
-depth.predict <- 88
-fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
-           Log.DEPTH.CTR = log(abs(depth.predict)) - mean(test.data$Log.DEPTH), 
-           SH = seq(2.5, 197.5, by = 5), 
-           depth_m = rep(depth.predict, length(Log.height.ctr)))
 
-fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response"))
+fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
+                       SH = seq(2.5, 197.5, by = 5) 
+)
+
+fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$fit)
+fit.pred$se.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$se.fit)
 head(fit.pred)
-plot(fit.pred$pred.mtwt~fit.pred$SH)
+plot(fit.pred$pred.mtwt~fit.pred$SH )
 
 fit.pred$YEAR <- surveyyear
 fit.pred.2024 <- fit.pred 
+
 
 #create matrix of depths by tow to use in predict function
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
@@ -329,32 +322,30 @@ head(livefreq.condition.spatial)
 #export for spatial plot later 
 write.csv(livefreq.condition.spatial, paste0("Z:/Projects/SPA2/Data/SPA2_ConditionForSpatialPlot_",surveyyear,".csv"), row.names = FALSE)
 
-
-
-
-# ---- For Condition Time Series Figure ----
-#Mean Depth of area 
-livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
-#2024
-#STRATA_ID mean_depth
-#1    26      -86.8
-#2    57      -84.7
-
-
-#set predition depth 
-depth.xx <- 88
-
-condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
-                                 Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
-
-condition.100mm.2024 <- condition.100mm
-condition.100mm.2024 <- data.frame(YEAR = surveyyear, Condition = condition.100mm.2024) 
-condition.100mm.2024$Depth <- depth.xx
-condition.100mm.2024
-#2024
-#8.561007
-
-
+# 
+# 
+# 
+# # ---- For Condition Time Series Figure ----
+# #Mean Depth of area 
+# livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
+# #2024
+# #STRATA_ID mean_depth
+# #1    26      -86.8
+# #2    57      -84.7
+# 
+# 
+# #set predition depth 
+# depth.xx <- 88
+# 
+# condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
+#                                  Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
+# 
+# condition.100mm.2024 <- condition.100mm
+# condition.100mm.2024 <- data.frame(YEAR = surveyyear, Condition = condition.100mm.2024) 
+# condition.100mm.2024$Depth <- depth.xx
+# condition.100mm.2024
+# #2024
+# #8.561007
 
 
 #### 2006 ####
@@ -391,11 +382,9 @@ dev.off()
 
 #run model
 MWTSH.YYYY <-  glm(WET_MEAT_WGT~Log.HEIGHT.CTR+Log.DEPTH.CTR, data=test.data, family=Gamma(link=log), na.action = na.omit)
-#MWTSH.YYYY.2 <-  glm(WET_MEAT_WGT~Log.HEIGHT.CTR+Log.DEPTH.CTR, data=test.data, family=gaussian(link=log), na.action = na.omit)
 
 summary(MWTSH.YYYY)
 plot(MWTSH.YYYY)
-
 
 ## Plot of Pearson residuals 
 #plot(density(resid(MWTSH.YYYY, type='pearson')))
@@ -421,8 +410,6 @@ plot(MWTSH.YYYY)
 #length(cooksd_MWTSH.YYYY[cooksd_MWTSH.YYYY > mean(cooksd_MWTSH.YYYY) * 2])
 #test.data[23,]
 
-
-
 #Save summary to txt file
 sink(paste0("Z:/Projects/SPA2/Data/MWTSH_SPA2_",surveyyear,"_ModelSummary.txt"))
 print(summary(MWTSH.YYYY))
@@ -433,31 +420,27 @@ latt <- data.frame(test.data, res=residuals(MWTSH.YYYY,"pearson"),fit=fitted(MWT
 head(latt)
 
 #Residuals vs fitted - full area 
-#plot(MWTSH.YYYY$residuals ~ MWTSH.YYYY$fitted.values )
 plot(latt$res~ latt$fit )
 
-
 #Plot of fitted values 
-#plot(MWTSH.YYYY$model$WET_MEAT_WGT   ~ MWTSH.YYYY$fitted.values )
-#abline(0,1)
 plot(latt$WET_MEAT_WGT   ~ latt$fit )
 abline(0,1)
 
-
-# prediction 
+# prediction without depth
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
-depth.predict <- 85
-fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
-                       Log.DEPTH.CTR = log(abs(depth.predict)) - mean(test.data$Log.DEPTH), 
-                       SH = seq(2.5, 197.5, by = 5), 
-                       depth_m = rep(depth.predict, length(Log.height.ctr)))
 
-fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response"))
+fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
+                       SH = seq(2.5, 197.5, by = 5) 
+)
+
+fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$fit)
+fit.pred$se.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$se.fit)
 head(fit.pred)
 plot(fit.pred$pred.mtwt~fit.pred$SH )
 
 fit.pred$YEAR <- surveyyear
 fit.pred.2006 <- fit.pred 
+
 
 #create matrix of depths by tow to use in predict function
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
@@ -492,61 +475,58 @@ save(MWTSH.YYYY, latt, liveweightYYYY, detail.foryear, livefreqYYYY,
 
 
 
-# ----  Condition for Spatial Map ----
-# Only calculates the point condition for the single year you modelled above (i.e. surveyyear that's set above) 
-
-livefreq.condition.spatial <- livefreqYYYY
-#adjust depth, must center on same mean as used in original model
-livefreq.condition.spatial$log.ctr.adj_depth <- log(abs(livefreq.condition.spatial$ADJ_DEPTH)) - mean(test.data$Log.DEPTH) 
-#subset to just those tows that were detailed sampled 
-livefreq.condition.spatial <- livefreq.condition.spatial[is.element(livefreq.condition.spatial$TOW_NO, unique(test.data$TOW_NO)),c("TOW_NO","START_LAT", "START_LONG", "ADJ_DEPTH","log.ctr.adj_depth")]
-livefreq.condition.spatial$YEAR <- surveyyear #add year to dataframe
-
-
-#Predict a meat weight for 100mm for just sampled tows; #re.form=NULL (all random effects included since only predicting on those tows that were sampled)
-
-livefreq.condition.spatial$Condition <- predict(MWTSH.YYYY,newdata=data.frame(Log.HEIGHT.CTR=rep(log(100), dim(livefreq.condition.spatial)[1])-mean(test.data$Log.HEIGHT),
-                                                                              Log.DEPTH.CTR=livefreq.condition.spatial$log.ctr.adj_depth, 
-                                                                              TOW_NO=livefreq.condition.spatial$TOW_NO),
-                                                type="response")
-
-head(livefreq.condition.spatial)
-
-#export for spatial plot later 
-write.csv(livefreq.condition.spatial, paste0("Z:/Projects/SPA2/Data/SPA2_ConditionForSpatialPlot_",surveyyear,".csv"), row.names = FALSE)
-
-
-
-
-# ---- For Condition Time Series Figure ----
-#Mean Depth of area 
-livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
-# 2006
-#STRATA_ID mean_depth
-#1    26      -89.9
-#2    57      -80.2
-
-
-#set predition depth 
-depth.xx <- 88
-
-condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
-                                                            Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
-
-condition.100mm.2006 <- condition.100mm
-condition.100mm.2006 <- data.frame(YEAR = surveyyear, Condition = condition.100mm.2006) 
-condition.100mm.2006$Depth <- depth.xx
-condition.100mm.2006
-#2006
-#4.970498 
-
-
+# # ----  Condition for Spatial Map ----
+# # Only calculates the point condition for the single year you modelled above (i.e. surveyyear that's set above) 
+# 
+# livefreq.condition.spatial <- livefreqYYYY
+# #adjust depth, must center on same mean as used in original model
+# livefreq.condition.spatial$log.ctr.adj_depth <- log(abs(livefreq.condition.spatial$ADJ_DEPTH)) - mean(test.data$Log.DEPTH) 
+# #subset to just those tows that were detailed sampled 
+# livefreq.condition.spatial <- livefreq.condition.spatial[is.element(livefreq.condition.spatial$TOW_NO, unique(test.data$TOW_NO)),c("TOW_NO","START_LAT", "START_LONG", "ADJ_DEPTH","log.ctr.adj_depth")]
+# livefreq.condition.spatial$YEAR <- surveyyear #add year to dataframe
+# 
+# 
+# #Predict a meat weight for 100mm for just sampled tows; #re.form=NULL (all random effects included since only predicting on those tows that were sampled)
+# 
+# livefreq.condition.spatial$Condition <- predict(MWTSH.YYYY,newdata=data.frame(Log.HEIGHT.CTR=rep(log(100), dim(livefreq.condition.spatial)[1])-mean(test.data$Log.HEIGHT),
+#                                                                               Log.DEPTH.CTR=livefreq.condition.spatial$log.ctr.adj_depth, 
+#                                                                               TOW_NO=livefreq.condition.spatial$TOW_NO),
+#                                                 type="response")
+# 
+# head(livefreq.condition.spatial)
+# 
+# #export for spatial plot later 
+# write.csv(livefreq.condition.spatial, paste0("Z:/Projects/SPA2/Data/SPA2_ConditionForSpatialPlot_",surveyyear,".csv"), row.names = FALSE)
+# 
+# 
+# 
+# 
+# # ---- For Condition Time Series Figure ----
+# #Mean Depth of area 
+# livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
+# # 2006
+# #STRATA_ID mean_depth
+# #1    26      -89.9
+# #2    57      -80.2
+# 
+# 
+# #set predition depth 
+# depth.xx <- 88
+# 
+# condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
+#                                                             Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
+# 
+# condition.100mm.2006 <- condition.100mm
+# condition.100mm.2006 <- data.frame(YEAR = surveyyear, Condition = condition.100mm.2006) 
+# condition.100mm.2006$Depth <- depth.xx
+# condition.100mm.2006
+# #2006
+# #4.970498 
+# 
 
 
 #### 1996 #####
-
-### SET #### 
-surveyyear <- 1996  #2024, 2006, 1996
+surveyyear <- 1996
 
 #Construct data.frame similar to GMlivenfreq for weight per tow
 livefreqYYYY <- subset(livefreq, YEAR==surveyyear)
@@ -580,11 +560,9 @@ dev.off()
 
 #run model
 MWTSH.YYYY <-  glm(WET_MEAT_WGT~Log.HEIGHT.CTR+Log.DEPTH.CTR, data=test.data, family=Gamma(link=log), na.action = na.omit)
-#MWTSH.YYYY.2 <-  glm(WET_MEAT_WGT~Log.HEIGHT.CTR+Log.DEPTH.CTR, data=test.data, family=gaussian(link=log), na.action = na.omit)
 
 summary(MWTSH.YYYY)
 plot(MWTSH.YYYY)
-
 
 ## Plot of Pearson residuals 
 #plot(density(resid(MWTSH.YYYY, type='pearson')))
@@ -610,8 +588,6 @@ plot(MWTSH.YYYY)
 #length(cooksd_MWTSH.YYYY[cooksd_MWTSH.YYYY > mean(cooksd_MWTSH.YYYY) * 2])
 #test.data[23,]
 
-
-
 #Save summary to txt file
 sink(paste0("Z:/Projects/SPA2/Data/MWTSH_SPA2_",surveyyear,"_ModelSummary.txt"))
 print(summary(MWTSH.YYYY))
@@ -622,37 +598,30 @@ latt <- data.frame(test.data, res=residuals(MWTSH.YYYY,"pearson"),fit=fitted(MWT
 head(latt)
 
 #Residuals vs fitted - full area 
-#plot(MWTSH.YYYY$residuals ~ MWTSH.YYYY$fitted.values )
 plot(latt$res~ latt$fit )
 
-
 #Plot of fitted values 
-#plot(MWTSH.YYYY$model$WET_MEAT_WGT   ~ MWTSH.YYYY$fitted.values )
-#abline(0,1)
 plot(latt$WET_MEAT_WGT   ~ latt$fit )
 abline(0,1)
 
 
-# prediction 
+## prediction without depth
 Log.height.ctr <- log(seq(2.5, 197.5, by = 5)) - mean(test.data$Log.HEIGHT) #each shell height bin to predict on
-depth.predict <- 65
+
 fit.pred <- data.frame(Log.HEIGHT.CTR=Log.height.ctr,
-                       Log.DEPTH.CTR = log(abs(depth.predict)) - mean(test.data$Log.DEPTH), 
-                       SH = seq(2.5, 197.5, by = 5), 
-                       depth_m = rep(depth.predict, length(Log.height.ctr)))
+                       SH = seq(2.5, 197.5, by = 5) 
+)
 
 fit.pred$pred.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$fit)
 fit.pred$se.mtwt <- as.vector(predict(MWTSH.YYYY,newdata=fit.pred,type="response", se.fit = TRUE)$se.fit)
-head(fit.pred.all)
-plot(fit.pred$pred.mtwt~fit.pred$SH)
-points(sc.wgthgt$WET_MEAT_WGT~sc.wgthgt$HEIGHT)
+head(fit.pred)
+plot(fit.pred$pred.mtwt~fit.pred$SH )
 
 fit.pred$YEAR <- surveyyear
 fit.pred.1996 <- fit.pred 
-# fit.pred.2006 <- fit.pred
-# fit.pred.2024 <- fit.pred
 
 fit.pred.all <- rbind(fit.pred.2024, fit.pred.2006, fit.pred.1996) #For use in SPA2_HolisticPlots.R
+write.csv(fit.pred.all, "Z:/Projects/SPA2/Data/MWSH_fit_allyears.csv", row.names = FALSE)
 
 
 #create matrix of depths by tow to use in predict function
@@ -667,7 +636,7 @@ tow.pred <- (1:dim(livefreqYYYY)[1])
 for(i in tow.pred) temp[i,] <- as.vector(predict(MWTSH.YYYY,newdata=data.frame(Log.HEIGHT.CTR=Log.height.ctr,Log.DEPTH.CTR=rep(log.ctr.adj_depth[i], 40)),type="response"))
 temp
 
-#multply temp matrix (weight) by live numbers to get weight/size bin
+#multiply temp matrix (weight) by live numbers to get weight/size bin
 liveweightYYYY[,grep("BIN_ID_0", colnames(liveweightYYYY)):grep("BIN_ID_195", colnames(liveweightYYYY))] <- temp*livefreqYYYY[,grep("BIN_ID_0", colnames(livefreqYYYY)):grep("BIN_ID_195", colnames(livefreqYYYY))]
 
 #export file for later analysis
@@ -688,126 +657,62 @@ save(MWTSH.YYYY, latt, liveweightYYYY, detail.foryear, livefreqYYYY,
 
 
 
-# ----  Condition for Spatial Map ----
-# Only calculates the point condition for the single year you modelled above (i.e. surveyyear that's set above) 
-
-livefreq.condition.spatial <- livefreqYYYY
-#adjust depth, must center on same mean as used in original model
-livefreq.condition.spatial$log.ctr.adj_depth <- log(abs(livefreq.condition.spatial$ADJ_DEPTH)) - mean(test.data$Log.DEPTH) 
-#subset to just those tows that were detailed sampled 
-livefreq.condition.spatial <- livefreq.condition.spatial[is.element(livefreq.condition.spatial$TOW_NO, unique(test.data$TOW_NO)),c("TOW_NO","START_LAT", "START_LONG", "ADJ_DEPTH","log.ctr.adj_depth")]
-livefreq.condition.spatial$YEAR <- surveyyear #add year to dataframe
-
-
-#Predict a meat weight for 100mm for just sampled tows; #re.form=NULL (all random effects included since only predicting on those tows that were sampled)
-
-livefreq.condition.spatial$Condition <- predict(MWTSH.YYYY,newdata=data.frame(Log.HEIGHT.CTR=rep(log(100), dim(livefreq.condition.spatial)[1])-mean(test.data$Log.HEIGHT),
-                                                                              Log.DEPTH.CTR=livefreq.condition.spatial$log.ctr.adj_depth, 
-                                                                              TOW_NO=livefreq.condition.spatial$TOW_NO),
-                                                type="response")
-
-head(livefreq.condition.spatial)
-
-#export for spatial plot later 
-write.csv(livefreq.condition.spatial, paste0("Z:/Projects/SPA2/Data/SPA2_ConditionForSpatialPlot_",surveyyear,".csv"), row.names = FALSE)
-
-
-
-
-# ---- For Condition Time Series Figure ----
-#Mean Depth of area 
-livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
-
-#1996
-#STRATA_ID mean_depth
-#1  26    -79.7
-
-
-#set predition depth 
-depth.xx <- 88
-
-condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
-                                                            Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
-
-condition.100mm.1996 <- condition.100mm
-condition.100mm.1996 <- data.frame(YEAR = surveyyear, Condition = condition.100mm.1996) 
-condition.100mm.1996$Depth <- depth.xx
-condition.100mm.1996
-#1996
-#19.66132
-
-
-
-
-#### Write out combined files for condition at 100 mm SH for all years #### 
-condition.100mm <- rbind(condition.100mm.2024, condition.100mm.2006, condition.100mm.1996) 
-condition.100mm
-### Write out 
-write.csv(condition.100mm, paste0("Z:/Projects/SPA2/Data/condition.100mm.csv")) 
-
-## Plot of all mtwt-sh curves on same plot 
-mtwtsh.fit <- rbind(fit.pred.1996, fit.pred.2006, fit.pred.2024)
-
-ggplot(data =mtwtsh.fit, aes(x =  SH , y =  pred.mtwt, group = YEAR, color = as.factor(YEAR)) ) + 
-  geom_line() 
-
-
-### Example from SPA 6 in 2021
-#glm.out <- glm(log(WET_MEAT_WGT)~log(HEIGHT),data=test.data, family=gaussian, na.action = na.omit) 
-
-#a <- (glm.out$coefficients[1])
-#b <- (glm.out$coefficients[2])
-
-#a 2021:   -9.964147
-#b 2021:    2.662865 
-a <-   -9.964147
-b <-    2.662865 
-
-# W = aL^b
-# LN(W) = alpha + Beta LN(SH)
-
-SH <- seq(2.5, 197.5, by = 5)
-logWT <- a + b*log(SH)
-WT <- exp(logWT) 
-WT
-
-prediction <- data.frame(SH, pred.mtwt = WT)
-prediction$YEAR <- 2021
-
-
-test.compare <- mtwtsh.fit %>% select( SH,pred.mtwt, YEAR)
-test.compare <- rbind(test.compare, prediction)
-
-ggplot(data =test.compare, aes(x =  SH , y =  pred.mtwt, group = YEAR, color = as.factor(YEAR)) ) + 
-  geom_line() 
-
-
+# # ----  Condition for Spatial Map ----
+# # Only calculates the point condition for the single year you modelled above (i.e. surveyyear that's set above) 
+# 
+# livefreq.condition.spatial <- livefreqYYYY
+# #adjust depth, must center on same mean as used in original model
+# livefreq.condition.spatial$log.ctr.adj_depth <- log(abs(livefreq.condition.spatial$ADJ_DEPTH)) - mean(test.data$Log.DEPTH) 
+# #subset to just those tows that were detailed sampled 
+# livefreq.condition.spatial <- livefreq.condition.spatial[is.element(livefreq.condition.spatial$TOW_NO, unique(test.data$TOW_NO)),c("TOW_NO","START_LAT", "START_LONG", "ADJ_DEPTH","log.ctr.adj_depth")]
+# livefreq.condition.spatial$YEAR <- surveyyear #add year to dataframe
+# 
+# 
+# #Predict a meat weight for 100mm for just sampled tows; #re.form=NULL (all random effects included since only predicting on those tows that were sampled)
+# 
+# livefreq.condition.spatial$Condition <- predict(MWTSH.YYYY,newdata=data.frame(Log.HEIGHT.CTR=rep(log(100), dim(livefreq.condition.spatial)[1])-mean(test.data$Log.HEIGHT),
+#                                                                               Log.DEPTH.CTR=livefreq.condition.spatial$log.ctr.adj_depth, 
+#                                                                               TOW_NO=livefreq.condition.spatial$TOW_NO),
+#                                                 type="response")
+# 
+# head(livefreq.condition.spatial)
+# 
+# #export for spatial plot later 
+# write.csv(livefreq.condition.spatial, paste0("Z:/Projects/SPA2/Data/SPA2_ConditionForSpatialPlot_",surveyyear,".csv"), row.names = FALSE)
+# 
+# 
+# 
+# 
+# # ---- For Condition Time Series Figure ----
+# #Mean Depth of area 
+# livefreqYYYY %>% group_by(STRATA_ID) %>% summarise(mean_depth = mean(ADJ_DEPTH))
+# 
+# #1996
+# #STRATA_ID mean_depth
+# #1  26    -79.7
+# 
+# 
+# #set predition depth 
+# depth.xx <- 88
+# 
+# condition.100mm <- predict(MWTSH.YYYY, newdata = data.frame(Log.HEIGHT.CTR=log(100) - mean(test.data$Log.HEIGHT), 
+#                                                             Log.DEPTH.CTR = log(abs(depth.xx)) - mean(test.data$Log.DEPTH)), type = "response")
+# 
+# condition.100mm.1996 <- condition.100mm
+# condition.100mm.1996 <- data.frame(YEAR = surveyyear, Condition = condition.100mm.1996) 
+# condition.100mm.1996$Depth <- depth.xx
+# condition.100mm.1996
+# #1996
+# #19.66132
+# 
+# 
+# 
+# 
+# #### Write out combined files for condition at 100 mm SH for all years #### 
+# condition.100mm <- rbind(condition.100mm.2024, condition.100mm.2006, condition.100mm.1996) 
+# condition.100mm
+# ### Write out 
+# write.csv(condition.100mm, paste0("Z:/Projects/SPA2/Data/condition.100mm.csv")) 
+# 
 
 #### End #### 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
